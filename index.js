@@ -4,6 +4,7 @@ const cheerio = require("cheerio");
 const ProductInformation = require("./productModel");
 const PORT = 5000;
 let pageCount = 1;
+let lastPageValue = 1;
 const MONGO_URL = "mongodb://localhost:27017/chat";
 const URL = "https://www.oreillyauto.com/shop/brands/a/masterpro-shocks/mss";
 mongoose
@@ -72,7 +73,14 @@ async function scrapeWebsite(url, page) {
 
   // Extract product information using Cheerio
   const productInfo = {};
+  const h1Element = $("h1.js-product-name");
 
+  const line = h1Element.attr("data-line");
+  const part = h1Element.attr("data-item");
+  const name = h1Element.text();
+  productInfo["name"] = name;
+  productInfo["part"] = part;
+  productInfo["line"] = line;
   $(".product-list-details li").each(function () {
     const label = $(this)
       .find("span")
@@ -89,79 +97,118 @@ async function scrapeWebsite(url, page) {
 
     productInfo[label] = value;
   });
-  const compatibilityData = await page.evaluate(() => {
-    const compatibilityModels = document.querySelectorAll(
-      ".compatibility-models"
-    );
+  const compatibilityData = await compatibilityMakes($, productInfo);
 
-    const data = [];
+  console.log("ssssssssssss", productInfo, compatibilityData);
+  return { productInfo, compatibilityData };
+}
+async function compatibilityMakes($, info) {
+  const compatibilityModels = $(".compatibility-models");
+  const data = [];
 
-    compatibilityModels.forEach((model) => {
-      const make = model
-        .querySelector(".compatible-vehicle-name")
-        ?.textContent.trim();
-      const application = model
-        .querySelector(".pdp-comp_info")
-        ?.textContent.trim();
-      const tableRows = Array.from(
-        document.querySelectorAll(".vehicles-table tr")
-      );
-      const finalData = tableRows.map((row) => {
-        const columns = Array.from(row.querySelectorAll("td"));
+  compatibilityModels.each((index, model) => {
+    const make = $(model).find(".compatible-vehicle-name").text().trim();
+    const application = $(model).find(".pdp-comp_info").text().trim();
+
+    const tableRows = $(model).find(".vehicles-table tr");
+    const finalData = tableRows
+      .map((index, row) => {
+        const columns = $(row).find("td");
         const [application, year, vehicleNumber] = columns.map(
-          (column) => column.innerText
+          (index, column) => $(column).text().trim()
         );
+
         return {
           application,
           year,
           vehicleNumber,
         };
-      });
+      })
+      .get();
 
-      data.push({
-        make,
-        application,
-        finalData,
-      });
+    data.push({
+      name: info.name,
+      line: info.line,
+      make,
+      application,
+      finalData,
     });
-
-    return data;
   });
-  // await browser.close();
-  return { productInfo, compatibilityData };
+
+  return data;
+
+  // await page.evaluate(() => {
+  //   const compatibilityModels = document.querySelectorAll(
+  //     ".compatibility-models"
+  //   );
+
+  //   const data = [];
+
+  //   compatibilityModels.forEach((model) => {
+  //     const make = model
+  //       .querySelector(".compatible-vehicle-name")
+  //       ?.textContent.trim();
+  //     const application = model
+  //       .querySelector(".pdp-comp_info")
+  //       ?.textContent.trim();
+  //     const tableRows = Array.from(
+  //       document.querySelectorAll(".vehicles-table tr")
+  //     );
+  //     const finalData = tableRows.map((row) => {
+  //       const columns = Array.from(row.querySelectorAll("td"));
+  //       const [application, year, vehicleNumber] = columns.map(
+  //         (column) => column.innerText
+  //       );
+  //       return {
+  //         application,
+  //         year,
+  //         vehicleNumber,
+  //       };
+  //     });
+
+  //     data.push({
+
+  //       make,
+  //       application,
+  //       finalData,
+  //     });
+  //   });
+
+  //   return data;
+  // });
 }
-async function scrapeMultiplePages(lastPage) {
+
+async function scrapeMultiplePages(url) {
   const scrapedData = [];
   const browser = await puppeteer.launch({ headless: false });
-  // for(let i=0;i<lastPage;i++){
-
-  // }
   const page = await browser.newPage();
-  await page.goto(URL + `?page=${pageCount}`);
-  await page.waitForSelector(".js-product-link");
+  for (let i = 1; i <= lastPageValue; i++) {
+    await page.goto(url + `?page=${i}`);
+    if (i == 1) {
+      const value = await lastPageValueFuc(page);
+      lastPageValue = Math.ceil(value);
+    }
+    await page.waitForSelector(".js-product-link");
 
-  // Extract all href values from the anchor elements
-  const hrefValues = await page.evaluate(() => {
-    const anchorElements = document.querySelectorAll(".js-product-link");
-    const values = Array.from(anchorElements).map((element) =>
-      element.getAttribute("href")
-    );
-    return values;
-  });
-  console.log("check all", hrefValues);
+    // Extract all href values from the anchor elements
+    const hrefValues = await page.evaluate(() => {
+      const anchorElements = document.querySelectorAll(".js-product-link");
+      const values = Array.from(anchorElements).map((element) =>
+        element.getAttribute("href")
+      );
+      return values;
+    });
+    console.log("check all", hrefValues);
 
-  for (const url of hrefValues) {
-    const data = await scrapeWebsite(url, page);
-    scrapedData.push(data);
+    for (const url of hrefValues) {
+      const data = await scrapeWebsite(url, page);
+      scrapedData.push(data);
+    }
+    // await browser.close();
+    console.log("finallll", scrapedData);
   }
-  // await browser.close();
-  console.log("finallll", scrapedData);
-  // return scrapedData;
 }
-const initialPageRender = async (url) => {
-  const browser = await puppeteer.launch({ headless: false });
-  const page = await browser.newPage();
-  await page.goto(url);
+const lastPageValueFuc = async (page) => {
   const strongValues = await page.evaluate(() => {
     const strongElements = document.querySelectorAll(
       ".plp-results-count strong"
@@ -171,15 +218,6 @@ const initialPageRender = async (url) => {
     );
     return values;
   });
-  const lastPage = Number(strongValues[1]) / 24;
-  scrapeMultiplePages(lastPage);
-  await browser.close();
+  return Number(strongValues[1]) / 24;
 };
-initialPageRender(URL);
-// scrapeWebsite()
-//   .then((productInfo) => {
-//     console.log("Product Information:", JSON.stringify(productInfo, null, 2));
-//   })
-//   .catch((error) => {
-//     console.log("Error:", error);
-//   });
+scrapeMultiplePages(URL);
