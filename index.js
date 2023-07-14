@@ -145,6 +145,8 @@ async function scrapeWebsite() {
       element.click();
     });
   });
+  await page.waitForSelector("table.vehicles-table");
+
   const updatedHTML = await page.evaluate(() => {
     return document.documentElement.innerHTML;
   });
@@ -186,32 +188,20 @@ async function scrapeWebsite() {
       const application = model
         .querySelector(".pdp-comp_info")
         ?.textContent.trim();
-      const vehiclesTable = model.querySelector(".vehicles-table");
-      const vehicleRows = vehiclesTable.querySelectorAll("tr");
-      const vechileData = [];
 
-      vehicleRows.forEach((row) => {
-        const vehicleName = row
-          .querySelector(".full-vehicle")
-          ?.textContent.trim();
-        const year = row
-          .querySelector(".vehicle-years .mobile-year-display")
-          ?.textContent.trim();
-        const numVehicles = row
-          .querySelector(".num-vehicles")
-          ?.textContent.trim();
+      const tableRows = Array.from(
+        document.querySelectorAll(".vehicles-table tr")
+      );
 
-        vechileData.push({
-          vehicleName,
-          year,
-          numVehicles,
-        });
+      const finalData = tableRows.map((row) => {
+        const columns = Array.from(row.querySelectorAll("td"));
+        return columns.map((column) => column.innerText);
       });
 
       data.push({
         make,
         application,
-        vechileData,
+        finalData,
       });
     });
 
