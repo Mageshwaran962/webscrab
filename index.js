@@ -122,14 +122,33 @@ async function scrapeWebsite() {
   const page = await browser.newPage();
   // await page.setContent(html); // Replace `html` with the provided HTML content
   await page.goto(
-    "https://www.oreillyauto.com/detail/c/masterpro-shocks/masterpro-shock-absorber/mss0/ns128?pos=0&manufacturer=true"
+    "https://www.oreillyauto.com/detail/c/masterpro-strut-assemblies/masterpro-strut-assembly/msa0/33gm1110?q=struts&pos=0"
   );
   // Get the HTML content after executing JavaScript
+
+  await page.evaluate(() => {
+    const elementToClick = document.querySelectorAll(".product-list_title");
+    elementToClick.forEach((element) => {
+      if (element.innerText.trim() === "Compatibility") {
+        element.click();
+      }
+    });
+  });
+  // Wait for the new component to appear
+  await page.waitForSelector(".compatibility-models");
+  await page.waitForSelector("button.open-vehicle-table");
+
+  // Click on the result element in the new component
+  await page.evaluate(() => {
+    const nissanButton = document.querySelectorAll("button.open-vehicle-table");
+    nissanButton.forEach((element) => {
+      element.click();
+    });
+  });
   const updatedHTML = await page.evaluate(() => {
     return document.documentElement.innerHTML;
   });
-
-  await browser.close();
+  // await browser.close();
 
   // Continue with Cheerio for extracting product information
   const $ = cheerio.load(updatedHTML);
@@ -137,20 +156,73 @@ async function scrapeWebsite() {
   // Extract product information using Cheerio
   const productInfo = {};
 
-  productInfo.title = $(".pdp-info_title").text().trim();
-
   $(".product-list-details li").each(function () {
-    const label = $(this).find("span").text().trim().replace(":", "");
-    const value = $(this).find("strong").text().trim();
+    const label = $(this)
+      .find("span")
+      .text()
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const value = $(this)
+      .find("strong")
+      .text()
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
     productInfo[label] = value;
   });
+  const compatibilityData = await page.evaluate(() => {
+    const compatibilityModels = document.querySelectorAll(
+      ".compatibility-models"
+    );
 
-  return productInfo;
+    const data = [];
+
+    compatibilityModels.forEach((model) => {
+      const make = model
+        .querySelector(".compatible-vehicle-name")
+        ?.textContent.trim();
+      const application = model
+        .querySelector(".pdp-comp_info")
+        ?.textContent.trim();
+      const vehiclesTable = model.querySelector(".vehicles-table");
+      const vehicleRows = vehiclesTable.querySelectorAll("tr");
+      const vechileData = [];
+
+      vehicleRows.forEach((row) => {
+        const vehicleName = row
+          .querySelector(".full-vehicle")
+          ?.textContent.trim();
+        const year = row
+          .querySelector(".vehicle-years .mobile-year-display")
+          ?.textContent.trim();
+        const numVehicles = row
+          .querySelector(".num-vehicles")
+          ?.textContent.trim();
+
+        vechileData.push({
+          vehicleName,
+          year,
+          numVehicles,
+        });
+      });
+
+      data.push({
+        make,
+        application,
+        vechileData,
+      });
+    });
+
+    return data;
+  });
+
+  return { productInfo, compatibilityData };
 }
 scrapeWebsite()
   .then((productInfo) => {
-    console.log("Product Information:", productInfo);
+    console.log("Product Information:", JSON.stringify(productInfo, null, 2));
   })
   .catch((error) => {
     console.log("Error:", error);
