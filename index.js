@@ -1,7 +1,8 @@
 const puppeteer = require("puppeteer");
 const mongoose = require("mongoose");
 const cheerio = require("cheerio");
-const ProductInformation = require("./productModel");
+const productModel = require("./productModel");
+const compatibilityData = require("./compatibilityModel");
 const PORT = 5000;
 let pageCount = 1;
 let lastPageValue = 1;
@@ -18,95 +19,86 @@ mongoose
   .catch((err) => {
     console.log("DB error message", err.message);
   });
-// const sampleCreation = async () => {
-//   const sample = new sampleModel({
-//     productId: "12",
-//     productName: "shocks",
-//     description: "vechile parts",
-//     price: 43,
-//     quantity: 1,
-//     categoryIds: ["test 20101"],
-//     isActive: true,
-//     createdAt: new Date(),
-//     imageUrl: "ggggshhss",
-//   });
-//   const response = await sample.save();
-//   console.log("ssss", { id: response.id, ...response._doc });
-// };
-// sampleCreation();
 
 async function scrapeWebsite(url, page) {
-  // const browser = await puppeteer.launch({ headless: false });
-  // const page = await browser.newPage();
-  // await page.setContent(html); // Replace `html` with the provided HTML content
-  await page.goto("https://www.oreillyauto.com/" + url);
-  // Get the HTML content after executing JavaScript
+  try {
+    await page.goto("https://www.oreillyauto.com/" + url);
+    // Get the HTML content after executing JavaScript
 
-  await page.evaluate(() => {
-    const elementToClick = document.querySelectorAll(".product-list_title");
-    elementToClick.forEach((element) => {
-      if (element.innerText.trim() === "Compatibility") {
+    await page.evaluate(() => {
+      const elementToClick = document.querySelectorAll(".product-list_title");
+      elementToClick.forEach((element) => {
+        if (element.innerText.trim() === "Compatibility") {
+          element.click();
+        }
+      });
+    });
+    // Wait for the new component to appear
+    await page.waitForSelector(".compatibility-models");
+    await page.waitForSelector("button.open-vehicle-table");
+
+    // Click on the result element in the new component
+    await page.evaluate(() => {
+      const nissanButton = document.querySelectorAll(
+        "button.open-vehicle-table"
+      );
+      nissanButton.forEach((element) => {
         element.click();
-      }
+      });
     });
-  });
-  // Wait for the new component to appear
-  await page.waitForSelector(".compatibility-models");
-  await page.waitForSelector("button.open-vehicle-table");
+    await page.waitForSelector("table.vehicles-table");
 
-  // Click on the result element in the new component
-  await page.evaluate(() => {
-    const nissanButton = document.querySelectorAll("button.open-vehicle-table");
-    nissanButton.forEach((element) => {
-      element.click();
+    const updatedHTML = await page.evaluate(() => {
+      return document.documentElement.innerHTML;
     });
-  });
-  await page.waitForSelector("table.vehicles-table");
+    // await browser.close();
 
-  const updatedHTML = await page.evaluate(() => {
-    return document.documentElement.innerHTML;
-  });
-  // await browser.close();
+    // Continue with Cheerio for extracting product information
+    const $ = cheerio.load(updatedHTML);
 
-  // Continue with Cheerio for extracting product information
-  const $ = cheerio.load(updatedHTML);
+    // Extract product information using Cheerio
+    const productInfo = {};
+    const h1Element = $("h1.js-product-name");
 
-  // Extract product information using Cheerio
-  const productInfo = {};
-  const h1Element = $("h1.js-product-name");
+    const line = h1Element.attr("data-line");
+    const part = h1Element.attr("data-item");
+    const name = h1Element.text();
+    productInfo["name"] = name;
+    productInfo["part"] = part;
+    productInfo["line"] = line;
+    $(".product-list-details li").each(function () {
+      const label = $(this)
+        .find("span")
+        .text()
+        .replace(/<[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const value = $(this)
+        .find("strong")
+        .text()
+        .replace(/<[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
 
-  const line = h1Element.attr("data-line");
-  const part = h1Element.attr("data-item");
-  const name = h1Element.text();
-  productInfo["name"] = name;
-  productInfo["part"] = part;
-  productInfo["line"] = line;
-  $(".product-list-details li").each(function () {
-    const label = $(this)
-      .find("span")
-      .text()
-      .replace(/<[^>]*>/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const value = $(this)
-      .find("strong")
-      .text()
-      .replace(/<[^>]*>/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+      productInfo[label] = value;
+    });
+    const productInfoData = new productModel(productInfo);
+    await productInfoData.save();
+    const compatibilityData = await compatibilityMakes($, productInfo);
 
-    productInfo[label] = value;
-  });
-  const compatibilityData = await compatibilityMakes($, productInfo);
+    console.log("ssssssssssss", productInfo, compatibilityData);
 
-  console.log("ssssssssssss", productInfo, compatibilityData);
-  return { productInfo, compatibilityData };
+    return { productInfo, compatibilityData };
+  } catch (error) {
+    console.error("Error scraping website:", error);
+    throw error; // Re-throw the error to handle it in the calling function
+  }
 }
 async function compatibilityMakes($, info) {
   const compatibilityModels = $(".compatibility-models");
   const data = [];
 
-  compatibilityModels.each((index, model) => {
+  compatibilityModels.each(async (index, model) => {
     const make = $(model).find(".compatible-vehicle-name").text().trim();
     const application = $(model).find(".pdp-comp_info").text().trim();
 
@@ -125,57 +117,17 @@ async function compatibilityMakes($, info) {
         };
       })
       .get();
-
-    data.push({
+    const compatibility = new compatibilityData({
       name: info.name,
       line: info.line,
       make,
       application,
       finalData,
     });
+    await compatibility.save();
   });
 
   return data;
-
-  // await page.evaluate(() => {
-  //   const compatibilityModels = document.querySelectorAll(
-  //     ".compatibility-models"
-  //   );
-
-  //   const data = [];
-
-  //   compatibilityModels.forEach((model) => {
-  //     const make = model
-  //       .querySelector(".compatible-vehicle-name")
-  //       ?.textContent.trim();
-  //     const application = model
-  //       .querySelector(".pdp-comp_info")
-  //       ?.textContent.trim();
-  //     const tableRows = Array.from(
-  //       document.querySelectorAll(".vehicles-table tr")
-  //     );
-  //     const finalData = tableRows.map((row) => {
-  //       const columns = Array.from(row.querySelectorAll("td"));
-  //       const [application, year, vehicleNumber] = columns.map(
-  //         (column) => column.innerText
-  //       );
-  //       return {
-  //         application,
-  //         year,
-  //         vehicleNumber,
-  //       };
-  //     });
-
-  //     data.push({
-
-  //       make,
-  //       application,
-  //       finalData,
-  //     });
-  //   });
-
-  //   return data;
-  // });
 }
 
 async function scrapeMultiplePages(url) {
@@ -221,3 +173,71 @@ const lastPageValueFuc = async (page) => {
   return Number(strongValues[1]) / 24;
 };
 scrapeMultiplePages(URL);
+
+async function scrapeMultiplePages(url) {
+  const scrapedData = [];
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+  const failedUrls = []; // Array to store failed URLs
+  for (let i = 1; i <= lastPageValue; i++) {
+    try {
+      await page.goto(url + `?page=${i}`);
+      if (i == 1) {
+        const value = await lastPageValueFuc(page);
+        lastPageValue = Math.ceil(value);
+      }
+      await page.waitForSelector(".js-product-link");
+
+      const hrefValues = await page.evaluate(() => {
+        const anchorElements = document.querySelectorAll(".js-product-link");
+        const values = Array.from(anchorElements).map((element) =>
+          element.getAttribute("href")
+        );
+        return values;
+      });
+      console.log("check all", hrefValues);
+
+      for (const url of hrefValues) {
+        try {
+          const data = await scrapeWebsite(url, page);
+          scrapedData.push(data);
+        } catch (error) {
+          console.error("Error scraping website:", error);
+          failedUrls.push(url); // Add the failed URL to the array
+        }
+      }
+      console.log("finallll", scrapedData);
+    } catch (error) {
+      console.error("Error navigating to page:", error);
+    }
+  }
+
+  // Retry failed URLs
+  for (const url of failedUrls) {
+    try {
+      const data = await retryScrapeWebsite(url, page);
+      scrapedData.push(data);
+    } catch (error) {
+      console.error("Error retrying failed URL:", error);
+    }
+  }
+
+  await browser.close();
+}
+async function retryScrapeWebsite(url, page) {
+  const maxRetries = 3; // Maximum number of retry attempts
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      const data = await scrapeWebsite(url, page);
+      return data;
+    } catch (error) {
+      console.error(
+        `Error retrying scrape for URL: ${url}, Retry: ${retries + 1}`,
+        error
+      );
+      retries++;
+    }
+  }
+  throw new Error(`Scrape for URL failed after ${maxRetries} attempts: ${url}`);
+}
