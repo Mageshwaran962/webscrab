@@ -72,6 +72,7 @@ async function scrapeWebsite(url, page) {
         .text()
         .replace(/<[^>]*>/g, "")
         .replace(/\s+/g, " ")
+        .replace(/[\d:]+/g, "")
         .trim();
       const value = $(this)
         .find("strong")
@@ -104,76 +105,31 @@ async function compatibilityMakes($, info) {
 
     const tableRows = $(model).find(".vehicles-table tr");
     const finalData = tableRows
-      .map((index, row) => {
+      .map(async (index, row) => {
         const columns = $(row).find("td");
-        const [application, year, vehicleNumber] = columns.map(
-          (index, column) => $(column).text().trim()
+        const [application, year] = columns.map((index, column) =>
+          $(column).text().trim()
         );
 
-        return {
+        const document = {
+          part: info.part,
+          make,
           application,
           year,
-          vehicleNumber,
         };
+        data.push(document);
       })
       .get();
-    const compatibility = new compatibilityData({
-      name: info.name,
-      line: info.line,
-      make,
-      application,
-      finalData,
-    });
-    await compatibility.save();
   });
-
-  return data;
-}
-
-async function scrapeMultiplePages(url) {
-  const scrapedData = [];
-  const browser = await puppeteer.launch({ headless: false });
-  const page = await browser.newPage();
-  for (let i = 1; i <= lastPageValue; i++) {
-    await page.goto(url + `?page=${i}`);
-    if (i == 1) {
-      const value = await lastPageValueFuc(page);
-      lastPageValue = Math.ceil(value);
-    }
-    await page.waitForSelector(".js-product-link");
-
-    // Extract all href values from the anchor elements
-    const hrefValues = await page.evaluate(() => {
-      const anchorElements = document.querySelectorAll(".js-product-link");
-      const values = Array.from(anchorElements).map((element) =>
-        element.getAttribute("href")
-      );
-      return values;
-    });
-    console.log("check all", hrefValues);
-
-    for (const url of hrefValues) {
-      const data = await scrapeWebsite(url, page);
-      scrapedData.push(data);
-    }
-    // await browser.close();
-    console.log("finallll", scrapedData);
+  try {
+    await compatibilityData.collection.insertMany(data);
+    return data.length;
+  } catch (error) {
+    console.error("Error saving compatibility data:", error);
+    return 0;
   }
+  return data.length;
 }
-const lastPageValueFuc = async (page) => {
-  const strongValues = await page.evaluate(() => {
-    const strongElements = document.querySelectorAll(
-      ".plp-results-count strong"
-    );
-    const values = Array.from(strongElements).map((element) =>
-      element.textContent.trim()
-    );
-    return values;
-  });
-  return Number(strongValues[1]) / 24;
-};
-scrapeMultiplePages(URL);
-
 async function scrapeMultiplePages(url) {
   const scrapedData = [];
   const browser = await puppeteer.launch({ headless: false });
@@ -241,3 +197,17 @@ async function retryScrapeWebsite(url, page) {
   }
   throw new Error(`Scrape for URL failed after ${maxRetries} attempts: ${url}`);
 }
+
+const lastPageValueFuc = async (page) => {
+  const strongValues = await page.evaluate(() => {
+    const strongElements = document.querySelectorAll(
+      ".plp-results-count strong"
+    );
+    const values = Array.from(strongElements).map((element) =>
+      element.textContent.trim()
+    );
+    return values;
+  });
+  return Number(strongValues[1]) / 24;
+};
+scrapeMultiplePages(URL);
