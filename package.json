@@ -14,8 +14,10 @@
     "axios": "^1.4.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.3.1",
+    "fs": "^0.0.1-security",
     "mongoose": "^7.3.4",
     "nodemon": "^3.0.1",
+    "path": "^0.12.7",
     "puppeteer": "^20.7.3"
   }
 }
