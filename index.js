@@ -7,7 +7,11 @@ const PORT = 5000;
 let pageCount = 1;
 let lastPageValue = 1;
 const MONGO_URL = "mongodb://localhost:27017/chat";
-const URL = "https://www.oreillyauto.com/shop/brands/a/masterpro-shocks/mss";
+const URL =
+  "https://www.oreillyauto.com/shop/brands/a/masterpro-strut-mounts/msp";
+
+let browser;
+let page;
 mongoose
   .connect(MONGO_URL, {
     useNewUrlParser: true,
@@ -83,11 +87,12 @@ async function scrapeWebsite(url, page) {
 
       productInfo[label] = value;
     });
+
     const productInfoData = new productModel(productInfo);
     await productInfoData.save();
     const compatibilityData = await compatibilityMakes($, productInfo);
 
-    console.log("ssssssssssss", productInfo, compatibilityData);
+    // console.log("ssssssssssss", productInfo, compatibilityData);
 
     return { productInfo, compatibilityData };
   } catch (error) {
@@ -132,13 +137,16 @@ async function compatibilityMakes($, info) {
 }
 async function scrapeMultiplePages(url) {
   const scrapedData = [];
-  const browser = await puppeteer.launch({ headless: false });
-  const page = await browser.newPage();
+  let dataCount = 0; // Counter for the number of scraped data
+  browser = await puppeteer.launch({ headless: false });
+  page = await browser.newPage();
   const failedUrls = []; // Array to store failed URLs
+  const filterParts = [];
+
   for (let i = 1; i <= lastPageValue; i++) {
     try {
       await page.goto(url + `?page=${i}`);
-      if (i == 1) {
+      if (i === 1) {
         const value = await lastPageValueFuc(page);
         lastPageValue = Math.ceil(value);
       }
@@ -146,23 +154,43 @@ async function scrapeMultiplePages(url) {
 
       const hrefValues = await page.evaluate(() => {
         const anchorElements = document.querySelectorAll(".js-product-link");
-        const values = Array.from(anchorElements).map((element) =>
-          element.getAttribute("href")
-        );
+        const values = Array.from(anchorElements).map((element) => {
+          const url = element.getAttribute("href");
+          const startPos = url.lastIndexOf("/") + 1; // Get the index of the last '/'
+          const endPos = url.indexOf("?pos"); // Get the index of '?pos'
+          const value = url.substring(startPos, endPos); // Extra
+
+          return { urls: url, part: value };
+        });
         return values;
       });
-      console.log("check all", hrefValues);
-
-      for (const url of hrefValues) {
+      const uniqueHrefValues = await findDuplicate(hrefValues);
+      console.log(
+        "afterrrrrr check all",
+        hrefValues.length,
+        "ddddiffff",
+        uniqueHrefValues.length
+      );
+      for (const url of uniqueHrefValues) {
         try {
-          const data = await scrapeWebsite(url, page);
-          scrapedData.push(data);
+          dataCount++;
+          const data = await scrapeWebsite(url.urls, page);
+          if (data) {
+            scrapedData.push(data);
+          }
+          if (dataCount === 50) {
+            await browser.close(); // Close the current browser
+            browser = await puppeteer.launch({ headless: false }); // Open a new browser
+            page = await browser.newPage(); // Create a new page
+            dataCount = 0; // Reset the data count
+          }
+          console.log("dataCount", dataCount);
         } catch (error) {
           console.error("Error scraping website:", error);
-          failedUrls.push(url); // Add the failed URL to the array
+          failedUrls.push(url.urls); // Add the failed URL to the array
         }
       }
-      console.log("finallll", scrapedData);
+      // console.log("finallll", scrapedData);
     } catch (error) {
       console.error("Error navigating to page:", error);
     }
@@ -171,7 +199,7 @@ async function scrapeMultiplePages(url) {
   // Retry failed URLs
   for (const url of failedUrls) {
     try {
-      const data = await retryScrapeWebsite(url, page);
+      const data = await retryScrapeWebsite(url.urls, page);
       scrapedData.push(data);
     } catch (error) {
       console.error("Error retrying failed URL:", error);
@@ -180,9 +208,37 @@ async function scrapeMultiplePages(url) {
 
   await browser.close();
 }
+
+async function callScrapeWebsite(url) {
+  try {
+    console.log("ffffffff", browser, page);
+    if (!browser) {
+      browser = await puppeteer.launch({ headless: false });
+      page = await browser.newPage();
+    }
+
+    await scrapeWebsite(url, page);
+    // Process the result or perform any other operations
+    // ...
+  } catch (error) {
+    console.error("Error calling scrapeWebsite:", error);
+  } finally {
+    if (page) {
+      await page.close();
+    }
+  }
+}
 async function retryScrapeWebsite(url, page) {
-  const maxRetries = 3; // Maximum number of retry attempts
+  const maxRetries = 10; // Maximum number of retry attempts
+  const retryDelay = 5000; // Delay in milliseconds between retry attempts
   let retries = 0;
+  if (retries == 0) {
+    await page.close(); // Close the current page
+    await browser.close(); // Close the current browser
+
+    browser = await puppeteer.launch({ headless: false }); // Open a new browser
+    page = await browser.newPage();
+  }
   while (retries < maxRetries) {
     try {
       const data = await scrapeWebsite(url, page);
@@ -193,8 +249,14 @@ async function retryScrapeWebsite(url, page) {
         error
       );
       retries++;
+
+      if (retries < maxRetries) {
+        console.log(`Retrying in ${retryDelay / 1000} seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
     }
   }
+
   throw new Error(`Scrape for URL failed after ${maxRetries} attempts: ${url}`);
 }
 
@@ -210,4 +272,16 @@ const lastPageValueFuc = async (page) => {
   });
   return Number(strongValues[1]) / 24;
 };
+async function findDuplicate(dataset) {
+  const filteredData = [];
+  for (const ele of dataset) {
+    const existingProduct = await productModel.findOne({
+      part: ele.part.toUpperCase(),
+    });
+    if (existingProduct === null) {
+      filteredData.push(ele);
+    }
+  }
+  return filteredData;
+}
 scrapeMultiplePages(URL);
