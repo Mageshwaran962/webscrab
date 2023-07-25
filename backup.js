@@ -562,3 +562,95 @@ async function main() {
 }
 
 main();
+
+/// coookie approach
+const axios = require("axios");
+const tough = require("tough-cookie");
+
+const db = require("./mongo");
+
+async function setCookieHeader() {
+  const cookieStr = `Set-Cookie:WWW-WS-ROUTE=ffffffff09c20e0f45525d5f4f58455e445a4a4216cf; Version=1; Path=/; Max-Age=1800; Secure; HttpOnly; SameSite=None
+  Set-Cookie:_abck=EE7137962D0C5E0DF3512BEA8D0320C2~-1~YAAQbQHARbwqrmyJAQAA44NqdwoqSlHMewMywb6SB7gITC0LKps5qU5IVOEocgoEpAmKaPVb+3rwAXpHrc+ePgcrlhsaPerFukaVV6GYAdmex5QOxSXaYkTH/gr/fgcLDyth+ipz0JVTRGVNgXp6nzwNGJUT/D0udxFPBXNrerb23NPPGeSQUdUnn8tOc6Ep+NCJwQHKKJ7AC5oF0xBpmUtZvG7+lTyNa/oZ+Ap69QpPwyR2O2a5pzHAm7EIb8L2xwKNj19iiVXjzGw/NTmQpfs0llEKhKA8lQqYELf2H8qJ1iSQIygpLWJ5erQID8aJSbwSpj4fCCCWQWRmE4k8bLLiedPv5eLUcSnp96kXKmqGqaepcqvd7R5EfMdpNzxcjqAxPHcdk23LN42dNQZ+vdzw03Feo8GpnirC~-1~-1~-1; Domain=.autozone.com; Path=/; Expires=Sat, 20 Jul 2024 07:46:56 GMT; Max-Age=31536000; Secure
+  Set-Cookie:bm_sv=BB05987A06B846FB92F8DE4078111D72~YAAQbQHARb0qrmyJAQAA44NqdxRbbsJ5kZiFv9XziP0mmVOATgF7n4ODSbCJYO1v26Ay4cDGHyHTDN3RgIkpnjTFGuuxYan/J4yhBisOp4NAiiD05Fd6RbFhAXlfUrmfaEWtR7VSkfwwhECkRk/VZs+qeX4av9SF608q1crcSrEaf0veHrbgQ2gvy3lhSx6w47Qc5tZK3ANIqCg2IZuaU0yut2rCbz8Q/mLGHTFG/CGNzTkLt6b2F7EJ0GL8Qlji9GB/~1; Domain=.autozone.com; Path=/; Expires=Fri, 21 Jul 2023 09:32:28 GMT; Max-Age=6332; Secure
+  Set-Cookie:sbsd=000000000087db261cc631fc7dd382814fc94ad8e92fec53af742d01c08aebf88be3c16cb4b8bf4497-50ee-4fb1-8a54-48b45133f8b716926045161689846551; Secure; Domain=www.autozone.com; Path=/; HttpOnly; Max-Age=111600`;
+  // Remove newlines from the string and replace multiple spaces with a single space
+  // const cleanedCookieStr = cookieStr.replace(/\n/g, "").replace(/\s+/g, " ");
+
+  // // Extract the part after "Set-Cookie:" and remove the leading space
+  // const cookieHeadersp = cleanedCookieStr
+  //   .split("Set-Cookie:")
+  //   .slice(1)
+  //   .join(";")
+  //   .trim();
+  const cookieStrings = cookieStr.match(/Set-Cookie:[^\n]+/g);
+  const cookiess = cookieStrings.map((cookieString) =>
+    cookieString.replace("Set-Cookie:", "").trim()
+  );
+
+  // Combine multiple cookie values into a single string
+  const cookieHeaderValue = cookiess.join("; ");
+  await db.connect();
+  const sources = await db.source
+    .aggregate([
+      { $match: { isCompleted: false } },
+      {
+        $group: {
+          _id: {
+            itemId: "$itemId",
+            lineCode: "$lineCode",
+            partNumber: "$partNumber",
+            productDetailsPageUrl: "$productDetailsPageUrl",
+          },
+        },
+      },
+    ])
+    .toArray();
+  // console.log("database", sources);
+  // Split the cookies by newlines and clean up any leading/trailing whitespace
+  const cookies = cookieHeaderValue
+    .trim()
+    .split("\n")
+    .map((cookie) => cookie.trim());
+  const APIurl =
+    "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=";
+  const filteredArray = sources.slice(0, 20);
+  // Parse and format the cookies using tough-cookie
+  // for (const url of filteredArray) {
+  // const urlChange = `${APIurl}${url._id.partNumber}&productLineCode=${url._id.lineCode}&seourl=${url._id.productDetailsPageUrl}&year=`;
+  // console.log("changed Url", urlChange);
+  const cookieJar = new tough.CookieJar();
+  await Promise.all(
+    cookies.map((cookie) =>
+      cookieJar.setCookie(
+        cookie,
+        "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS34-84501B&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls34-84501b%2F762340_0_0&skuId=762340&year="
+      )
+    )
+  );
+
+  // Get the cookies in the proper format
+  const cookieHeader = await cookieJar.getCookieString(
+    "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS34-84501B&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls34-84501b%2F762340_0_0&skuId=762340&year="
+  );
+  console.log("headerrrrrrrrrrrrrrrr", cookieHeader);
+
+  // Make the Axios request with the cookie header
+  try {
+    const response = await axios.get(
+      "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS34-84501B&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls34-84501b%2F762340_0_0&skuId=762340&year=",
+      {
+        headers: {
+          Cookie: cookieHeader,
+        },
+      }
+    );
+    console.log("success", response.data);
+    // The response headers will be logged here
+  } catch (error) {
+    console.error("Error fetching header response:", error.message);
+  }
+  // }
+}
+
+setCookieHeader();

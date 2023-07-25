@@ -1,85 +1,17 @@
-// const cheerio = require("cheerio");
-// const axios = require("axios");
-// const headers = {
-//   server: "Apache",
-//   "x-request-id": "ZLhnIWVSiifMeOYv8Rxz0AAAAbU",
-//   "x-frame-options": "SAMEORIGIN",
-//   "cache-control": "max-age=86400, public",
-//   "content-type": "application/json",
-//   "content-length": "343",
-//   date: "Thu, 20 Jul 2023 15:06:59 GMT",
-//   connection: "close",
-//   vary: "Accept-Encoding",
-//   "server-timing":
-//     'cdn-cache; desc=HIT, edge; dur=1, dtSInfo;desc="0", dtRpid;desc="-1245436569", ak_p; desc="469407_1750514772_1019672462_38_13995_4_-_-";dur=1',
-//   "set-cookie": [
-
-//     ],
-//   "strict-transport-security": "max-age=31536000",
-// };
-// async function scrapeWebsite() {
-//   try {
-//     const response = await axios.get(
-//       "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS33-80582R&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls33-80582r%2F761599_0_0&skuId=761599&year=",
-//       { headers }
-//     );
-//     console.log("resssssss", response.headers);
-//     console.log("data", response.data);
-//     // Continue with scraping logic
-//   } catch (error) {
-//     console.error("Error:", error);
-//   }
-// }
-
-// scrapeWebsite();
-
-// const puppeteer = require("puppeteer");
-
-// (async () => {
-//   try {
-//     // Launch headless browser
-//     const browser = await puppeteer.launch({ headless: false });
-//     const page = await browser.newPage();
-//     await page.setUserAgent(
-//       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36"
-//     );
-//     // Navigate to the URL
-//     const url =
-//       "https://www.autozone.com/suspension-steering-tire-and-wheel/shock-strut/p/duralast-loaded-strut-assembly-ls33-80582r/761599_0_0";
-//     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-//     // Get the response headers
-//     const response = await page.waitForResponse(
-//       (response) => response.url() === url
-//     );
-//     const headers = response.headers();
-
-//     // Print the headers
-//     console.log("Response Headers:");
-//     for (const [key, value] of Object.entries(headers)) {
-//       console.log(`${key}: ${value}`);
-//     }
-
-//     // Close the browser
-//     await browser.close();
-//   } catch (error) {
-//     console.error("Error:", error);
-//   }
-// })();
-
 const axios = require("axios");
 const tough = require("tough-cookie");
-
+const db = require("./mongo");
+const puppeteer = require("puppeteer");
 async function setCookieHeader() {
+  // const check = await getSetCookiesAndResponseHeaders();
+  // const check = await getCall();
   const cookieStr = `Set-Cookie:
-  _abck=EE7137962D0C5E0DF3512BEA8D0320C2~-1~YAAQVLxWaKWtASmJAQAAGjJHdArcqGZ9RPxW7sDWP81zfNOZ7LfXo13Hzcbp9YNvDSnM3srTxSMZa86IPe1bpOzxJLLZyfGq8MILKa3Id31xLpo7DBoZ/NtQMKRZiZi/NMHo7n7ZvWWNiEnHmK+benEbYp5LEBN4ESp9RgmZWeyPZmNMMNnpuwgKku/7TcbsaWBxAUni40Bh8wtVFwBr5C3QKZvbioEdcyMak0n/O2hpb5++qecCJfsXO9w/MZ9R3NOPCQOaUE3SzO5dZGBOcfc3fGmfLepRvlZn7ofJ7lzzgqXT73VY8+E1C5aex5BQ4tox+K7n+DFMIv+M6KwLBSDQJ2b982aVJ2H0kPq7y3aRAYJW8dy96HiO0Iw0wQtZmBzazztHKimcpJNbrLcno1wD2//8f3JwAXGw~-1~-1~-1; Domain=.autozone.com; Path=/; Expires=Fri, 19 Jul 2024 17:09:30 GMT; Max-Age=31536000; Secure
+  WWW-WS-ROUTE=ffffffff09c20e0f45525d5f4f58455e445a4a421730; Version=1; Path=/; Max-Age=1800; Secure; HttpOnly; SameSite=None
   Set-Cookie:
-  bm_sv=B428EE2D9B83BF5196F41A0A930D4C96~YAAQVLxWaKatASmJAQAAGjJHdBT7BUlhcNLbvjNT/pQn8uiKY4YBsgzw2DtPymzJVjB9ZTABPo/tSxFcoAqT7SEthdPTh7v9d463wdJTmiRQlF5FkBmwQCZvjWYB/q2JTFsJsW8zHQ4hz567iqD6qQ0DTa03Cp2bDhtkK1kRKzfjTefnAFLqAWds3A698lZTwdYweYbLOCFgCsWc7ZtLEqWDakUMJ0e6EZ/LKcsWNXRXYeUz8gOETlGP+xsHhKOp3ZU=~1; Domain=.autozone.com; Path=/; Expires=Thu, 20 Jul 2023 19:04:15 GMT; Max-Age=6885; Secure
+  bm_sv=088452E2BB59E1FF69D3C99ECEF6CC1B~YAAQyXQsMWPeYmyJAQAAy8kOiRRXCen1bjPZLwjbA8LlCSEwx0wxPeiE38E+EVGnNCBdNonGCh/DhfA56Tgx7BVp4lbiObTqw0fkfl4YCFVdtc51btpce/vBHvl7uPuNj3orMX3dTaEI1la46NmdbMMkzwM3ndsSNVPuymh3EA5wF4ycloHEETb3DPStFh9qs3xIVjBseLxNwH/doUp7XK1m2G8HKORLeDA3lts3uKfCHMIB1fRNu9THKVHx5cH6Zre/~1; Domain=.autozone.com; Path=/; Expires=Mon, 24 Jul 2023 19:54:10 GMT; Max-Age=6855; Secure
   Set-Cookie:
-  sbsd=0000000000e66236863d87cfdb6f7e056169bf53bb438572f1ba863ec23b6ec02b2c32b285b8bf4497-50ee-4fb1-8a54-48b45133f8b716925518701689846551; Secure; Domain=www.autozone.com; Path=/; HttpOnly; Max-Age=111600
-  `;
-
-  // Remove newlines from the string and replace multiple spaces with a single space
+  sbsd=0000000000d88c2180a4fd1076cf47938933944ecd1ef56c0f1beea0d80bf581913f5b326e5b869a43-41b8-490d-a9f8-7271fb45d14516929004941690221247; Secure; Domain=www.autozone.com; Path=/; HttpOnly; Max-Age=111600`;
+  // console.log("ttt", cookieStr);
   const cleanedCookieStr = cookieStr.replace(/\n/g, "").replace(/\s+/g, " ");
 
   // Extract the part after "Set-Cookie:" and remove the leading space
@@ -91,51 +23,158 @@ async function setCookieHeader() {
 
   // console.log("chan", cookieHeadersp);
 
-  // const cookieStr = `
-  // "WWW-WS-ROUTE=ffffffff09c20e0c45525d5f4f58455e445a4a4216cf; Version=1; Path=/; Max-Age=1800; Secure; HttpOnly; SameSite=None",
-  // "_abck=EE7137962D0C5E0DF3512BEA8D0320C2~0~YAAQVLxWaCjcACmJAQAA4C7mcwo8RlxUrmMbdYggorE4cwP+Bqk/wqG9nsW1OqxV17AnMPIhoYND+/tkQlffRfuyYhwjYDhvuvCSSTgGKidYSG0lZ7t827jk6fRmrZzqQxYRug332lf0cQYcTGrFpaXCNNnDJK+MECdTR5MyBQuwvPSuuiur1uQTJ2LvFAGWH5WWNfHn/a+BTlKK4rCwNzwn3VBrHJW74GFsHMypwYnr5MQZtAcYhUP/7KZ68fyDoKcfPqcTxtrLMwi8xGPp8vXSVLDL1qJ+wplUnVjI4DGv4Bg0EHCC4AAT+52CUeG7SqaAeqeyDHvNFYYHyEz58iU4tDFRlcLDjzgATwJxMlJPOwKYQ7bcw7KQ+D19aDIlWKqGIz6muyWWpuIK5p4QYFIDmGi1pi0g5tI=~-1~-1~-1; Domain=.autozone.com; Path=/; Expires=Fri, 19 Jul 2024 15:23:32 GMT; Max-Age=31536000; Secure",
-  // "bm_sv=260539E9524F9AEF7E0792C1ED160124~YAAQVLxWaCncACmJAQAA4C7mcxQp5tb78qOERiB42/p94vmrVvPyrnOcZjJhhsoztkxpj2A/PEwA9WXHCzi7FxxSn1DTRp1kSLLaQDrUdc8DgPOULz9FBTvgZeVbQ/Q6K/22zHDa6EziYKBoyaRM/BvZE9yoXdS6Y+fJZIPltsCw1CughRcxmVJAzXA9tIxRTeBCJnmZLsPL+Wr9ia5nBGn1Hu+CAOh/ihl37/ersB5grhZmYnJlGJVY3XTj5W+tiMfM~1; Domain=.autozone.com; Path=/; Expires=Thu, 20 Jul 2023 16:46:34 GMT; Max-Age=4982; Secure",
-  // "sbsd=00000000004db31fb2d6836124458a5769db9a8ff630c8eaead79ba3cfc09117e0880d598db8bf4497-50ee-4fb1-8a54-48b45133f8b716925455111689846551; Secure; Domain=www.autozone.com; Path=/; HttpOnly; Max-Age=111600"
-  // `;
-
   // Split the cookies by newlines and clean up any leading/trailing whitespace
   const cookies = cookieHeadersp
     .trim()
     .split("\n")
     .map((cookie) => cookie.trim());
+  await db.connect();
+  const sources = await db.source
+    .aggregate([
+      { $match: { isCompleted: false } },
+      {
+        $group: {
+          _id: {
+            itemId: "$itemId",
+            lineCode: "$lineCode",
+            partNumber: "$partNumber",
+            productDetailsPageUrl: "$productDetailsPageUrl",
+          },
+        },
+      },
+    ])
+    .toArray();
+  const APIurl =
+    "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=";
+  const filteredArray = sources.slice(0, 20);
+  const finalArray = [];
 
   // Parse and format the cookies using tough-cookie
-  const cookieJar = new tough.CookieJar();
-  await Promise.all(
-    cookies.map((cookie) =>
-      cookieJar.setCookie(
-        cookie,
-        "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS53-90631R&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls53-90631r%2F759775_0_0&skuId=759775&year="
-      )
-    )
-  );
+  for (const url of filteredArray) {
+    const filterSkuid = url._id.productDetailsPageUrl.split("/");
+    const numberPart = filterSkuid[filterSkuid.length - 1];
+    const numberOnly = numberPart.split("_")[0];
+    const params = {
+      partNumber: url._id.partNumber,
+      productLineCode: url._id.lineCode,
+      seourl: url._id.productDetailsPageUrl,
+      skuId: numberOnly,
+      year: "",
+    };
+    const urlChange = `${APIurl}${params.partNumber}&productLineCode=${
+      params.productLineCode
+    }&seourl=${encodeURIComponent(params.seourl)}&skuId=${params.skuId}&year=`;
+    console.log("changed Url", urlChange);
+    const cookieJar = new tough.CookieJar();
+    await Promise.all(
+      cookies.map((cookie) => cookieJar.setCookie(cookie, urlChange))
+    );
 
-  // Get the cookies in the proper format
-  const cookieHeader = await cookieJar.getCookieString(
-    "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS53-90631R&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls53-90631r%2F759775_0_0&skuId=759775&year="
-  );
-  console.log("headerrrrrrrrrrrrrrrr", cookieHeader);
+    // Get the cookies in the proper format
+    const cookieHeader = await cookieJar.getCookieString(urlChange);
+    console.log("headerrrrrrrrrrrrrrrr", cookieHeader);
 
-  // Make the Axios request with the cookie header
-  try {
-    const response = await axios.get(
-      "https://www.autozone.com/ecomm/b2c/v1/browse/page/getProductFitVehicles?make=&model=&partNumber=LS53-90631R&productLineCode=AZR&seourl=%2Fsuspension-steering-tire-and-wheel%2Fshock-strut%2Fp%2Fduralast-loaded-strut-assembly-ls53-90631r%2F759775_0_0&skuId=759775&year=",
-      {
+    // Make the Axios request with the cookie header
+    // const headers = {
+    //   Cookie: cookieHeader,
+    //   // Add other headers if needed
+    // };
+
+    try {
+      const response = await axios.get(urlChange, {
         headers: {
           Cookie: cookieHeader,
         },
-      }
-    );
-    console.log(response.data);
-    // The response headers will be logged here
-  } catch (error) {
-    console.error("Error fetching header response:", error.message);
+      });
+
+      // console.log("success", response);
+      // The response headers will be logged here
+      finalArray.push(response.data);
+      console.log("length", finalArray.length);
+    } catch (error) {
+      console.error("Error fetching header response:", error.message);
+    }
   }
 }
 
 setCookieHeader();
+
+async function getSetCookiesAndResponseHeaders() {
+  const urlArray = [];
+  const url =
+    "https://www.autozone.com/suspension-steering-tire-and-wheel/shock-strut?searchText=struts";
+
+  try {
+    const browser = await puppeteer.launch({
+      headless: false,
+      executablePath:
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    });
+    const page = await browser.newPage();
+
+    // Intercept network responses to capture response headers
+    page.on("response", (response) => {
+      const url = response.url();
+      if (
+        url === "https://www.autozone.com/ecomm/b2c/v1/tvpage/info?skuId=761599"
+      ) {
+        const headers = response.headers();
+        // console.log("Response Headers:");
+        // console.log(headers);
+        urlArray.push(headers["set-cookie"]);
+      }
+    });
+
+    // Navigate to the URL
+    await page.goto(url);
+
+    // Click on the button to trigger navigation
+    // await page.click('[data-testid="PDPFitment"]');
+
+    // Wait for navigation to complete
+    // await page.waitForNavigation({ waitUntil: "networkidle2" });
+
+    // Get the cookies from the page context
+    const cookies = await page.evaluate(() => {
+      return document.cookie;
+    });
+
+    // Parse the cookies and split them into an array
+    const cookiesArray = cookies.split("; ");
+
+    // Output the Set-Cookie headers
+    // console.log("Set-Cookie Headers:");
+    console.log(urlArray[0]);
+    const individualCookies = urlArray[0].split("\n");
+
+    // Create the Set-Cookie headers
+    const setCookieHeaders = individualCookies.map(
+      (cookie) => `Set-Cookie: ${cookie}`
+    );
+
+    console.log("final", setCookieHeaders.join());
+    // Close the browser
+    // await browser.close();
+    const result = setCookieHeaders.join();
+    return result;
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
+// getSetCookiesAndResponseHeaders();
+async function getCall() {
+  try {
+    const response = await axios.get(
+      "https://www.autozone.com/ecomm/b2c/v1/browse/skus/price/762340,1196874,761351,760099,759775,761350?storeNumber=9801"
+    );
+    const result = response.headers;
+    // const setCookieHeaders = result
+    //   .map((cookie) => `Set-Cookie: ${cookie}`)
+    //   .join();
+    console.log("final resss", result);
+    return result;
+  } catch (err) {
+    console.log(err);
+  }
+}
+// getCall();
