@@ -3,14 +3,10 @@ const tough = require("tough-cookie");
 const db = require("./mongo");
 const puppeteer = require("puppeteer");
 async function setCookieHeader() {
-  // const check = await getSetCookiesAndResponseHeaders();
+  const check = await getSetCookiesAndResponseHeaders();
   // const check = await getCall();
-  const cookieStr = `Set-Cookie:
-  WWW-WS-ROUTE=ffffffff09c20e0f45525d5f4f58455e445a4a421730; Version=1; Path=/; Max-Age=1800; Secure; HttpOnly; SameSite=None
-  Set-Cookie:
-  bm_sv=088452E2BB59E1FF69D3C99ECEF6CC1B~YAAQyXQsMWPeYmyJAQAAy8kOiRRXCen1bjPZLwjbA8LlCSEwx0wxPeiE38E+EVGnNCBdNonGCh/DhfA56Tgx7BVp4lbiObTqw0fkfl4YCFVdtc51btpce/vBHvl7uPuNj3orMX3dTaEI1la46NmdbMMkzwM3ndsSNVPuymh3EA5wF4ycloHEETb3DPStFh9qs3xIVjBseLxNwH/doUp7XK1m2G8HKORLeDA3lts3uKfCHMIB1fRNu9THKVHx5cH6Zre/~1; Domain=.autozone.com; Path=/; Expires=Mon, 24 Jul 2023 19:54:10 GMT; Max-Age=6855; Secure
-  Set-Cookie:
-  sbsd=0000000000d88c2180a4fd1076cf47938933944ecd1ef56c0f1beea0d80bf581913f5b326e5b869a43-41b8-490d-a9f8-7271fb45d14516929004941690221247; Secure; Domain=www.autozone.com; Path=/; HttpOnly; Max-Age=111600`;
+  const cookieStr = check;
+
   // console.log("ttt", cookieStr);
   const cleanedCookieStr = cookieStr.replace(/\n/g, "").replace(/\s+/g, " ");
 
@@ -102,7 +98,7 @@ setCookieHeader();
 async function getSetCookiesAndResponseHeaders() {
   const urlArray = [];
   const url =
-    "https://www.autozone.com/suspension-steering-tire-and-wheel/shock-strut?searchText=struts";
+    "https://www.autozone.com/suspension-steering-tire-and-wheel/shock-strut/p/duralast-loaded-strut-assembly-ls33-80582r/761599_0_0";
 
   try {
     const browser = await puppeteer.launch({
@@ -111,7 +107,14 @@ async function getSetCookiesAndResponseHeaders() {
         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     });
     const page = await browser.newPage();
-
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    );
+    await page.setViewport({ width: 1536, height: 864 });
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "en-US,en;q=0.9", // Simulate English language preference
+      Referer: "https://www.google.com/", // Set a referring URL for navigation
+    });
     // Intercept network responses to capture response headers
     page.on("response", (response) => {
       const url = response.url();
@@ -133,6 +136,14 @@ async function getSetCookiesAndResponseHeaders() {
 
     // Wait for navigation to complete
     // await page.waitForNavigation({ waitUntil: "networkidle2" });
+
+    const button = await page.waitForSelector(".az_vqb");
+    const buttonBox = await button.boundingBox();
+    const x = buttonBox.x + getRandomInt(5, buttonBox.width - 5);
+    const y = buttonBox.y + getRandomInt(5, buttonBox.height - 5);
+    await page.mouse.move(x, y, { steps: 20 });
+    await page.waitForFunction(getRandomInt(500, 1000));
+    await button.click();
 
     // Get the cookies from the page context
     const cookies = await page.evaluate(() => {
@@ -178,3 +189,7 @@ async function getCall() {
   }
 }
 // getCall();
+
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}

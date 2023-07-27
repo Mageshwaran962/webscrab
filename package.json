@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon autoZoneIndex.js"
+    "start": "nodemon oreillyauto.js"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +22,7 @@
     "path": "^0.12.7",
     "puppeteer": "^20.7.3",
     "puppeteer-core": "^20.9.0",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "selenium-webdriver": "^4.10.0",
     "tough-cookie": "^4.1.3"
   }
